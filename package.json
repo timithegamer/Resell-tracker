@@ -1,12 +1,11 @@
 {
   "name": "resell-tracker",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Web-App zum Tracken von Resells: Artikel, Hauls, Gewinne und KI-Prompts.",
-  "engines": { "node": ">=22.5" },
+  "description": "Web-App zum Tracken von Resells: Artikel, Hauls, Gewinne und KI-Prompts. Läuft mit Supabase + Netlify.",
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning server.js",
-    "dev": "node --disable-warning=ExperimentalWarning --watch server.js"
+    "build": "node scripts/build-config.mjs",
+    "dev": "node scripts/dev.mjs"
   }
 }

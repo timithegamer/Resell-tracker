@@ -1,0 +1,16 @@
+{
+  "name": "Resell Tracker",
+  "short_name": "Resell",
+  "description": "Einkauf, Verkauf und Gewinn deiner Resells",
+  "lang": "de",
+  "start_url": "./#/inventar",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f2",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

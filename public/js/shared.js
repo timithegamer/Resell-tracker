@@ -1,5 +1,6 @@
-// Wird von Browser und Server gemeinsam benutzt, damit die Vorschau im
-// Haul-Formular exakt dasselbe rechnet wie der Server beim Speichern.
+// Rechenlogik der App. Die Kostenverteilung existiert zusätzlich in der
+// Datenbank (supabase/schema.sql), damit die Vorschau im Haul-Formular
+// exakt dasselbe zeigt, was danach gespeichert wird.
 // Alle Geldbeträge sind ganze Cent-Beträge.
 
 export const CATEGORIES = [
@@ -23,19 +24,52 @@ export const PLATFORMS = [
   'Vestiaire Collective', 'Grailed', 'StockX', 'Cardmarket', 'Flohmarkt', 'Privat', 'Sonstiges',
 ];
 
+// Plattformen, auf denen man inserieren kann (für den Crosslisting-Tracker).
+export const ONLINE_PLATFORMS = [
+  'Vinted', 'eBay', 'Kleinanzeigen', 'willhaben', 'Shpock', 'Depop',
+  'Vestiaire Collective', 'Grailed', 'StockX', 'Cardmarket',
+];
+
+export const EXPENSE_CATEGORIES = [
+  'Versandmaterial', 'Fahrtkosten', 'Plattform-Abos & Werbung', 'Zubehör & Lager', 'Sonstiges',
+];
+
+// DAC7: Plattformen melden Verkäufer ab 30 Verkäufen ODER 2.000 € pro Jahr.
+export const DAC7 = { sales: 30, revenue: 200000 };
+
+// Lagerdauer in Tagen (ab Einkaufsdatum, sonst ab Anlage).
+export function ageDays(a, now = new Date()) {
+  const start = a.purchase_date ? new Date(a.purchase_date + 'T00:00:00') : new Date(a.created_at);
+  const end = a.status === 'verkauft' && a.sale_date ? new Date(a.sale_date + 'T00:00:00') : now;
+  return Math.max(0, Math.floor((end - start) / 86400000));
+}
+
+// Stufen für Ladenhüter: 0 = frisch, 1 = ab 30, 2 = ab 60, 3 = ab 90 Tagen.
+export function ageLevel(days) {
+  return days >= 90 ? 3 : days >= 60 ? 2 : days >= 30 ? 1 : 0;
+}
+
 // Verteilt `total` Cent auf die Gewichte, sodass die Summe exakt stimmt
-// (Methode der größten Reste). Sind alle Gewichte 0, wird gleichmäßig verteilt.
+// (Methode der größten Reste, bei Gleichstand gewinnt der vordere).
+// Sind alle Gewichte 0, wird gleichmäßig verteilt. Rechnet nur mit ganzen
+// Zahlen, damit das Ergebnis exakt dem von public.distribute() in der
+// Datenbank entspricht (Beträge sind dort auf 100.000 € begrenzt).
 export function distribute(total, weights) {
   const n = weights.length;
   if (n === 0) return [];
   let w = weights.map((x) => Math.max(0, x || 0));
   let sum = w.reduce((a, b) => a + b, 0);
   if (sum === 0) { w = w.map(() => 1); sum = n; }
-  const raw = w.map((x) => (total * x) / sum);
-  const out = raw.map(Math.floor);
+  const out = [];
+  const rems = [];
+  w.forEach((x, i) => {
+    const r = (total * x) % sum;
+    out.push((total * x - r) / sum);
+    rems.push([r, i]);
+  });
   let rest = total - out.reduce((a, b) => a + b, 0);
-  const order = raw.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0]);
-  for (let k = 0; rest > 0; k = (k + 1) % n, rest--) out[order[k][1]]++;
+  rems.sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (let k = 0; k < rest; k++) out[rems[k][1]]++;
   return out;
 }
 
