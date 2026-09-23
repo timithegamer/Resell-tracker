@@ -93,7 +93,10 @@ function renderAuth() {
     btn.disabled = true;
     const { data, error } = await sb.auth.signInWithPassword({ email: f.email.trim(), password: f.password });
     if (error) {
-      err.textContent = /Invalid login/i.test(error.message) ? 'E-Mail oder Passwort falsch' : error.message;
+      err.textContent = /Invalid login/i.test(error.message) ? 'E-Mail oder Passwort falsch'
+        : /Invalid path|Failed to fetch|Load failed|NetworkError/i.test(error.message)
+          ? 'Keine Verbindung zu Supabase. Stimmt SUPABASE_URL bei Netlify? Richtig ist nur https://xxxx.supabase.co ohne Zusatz.'
+          : error.message;
       btn.disabled = false;
       return;
     }

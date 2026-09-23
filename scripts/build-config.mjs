@@ -13,12 +13,29 @@ if (fs.existsSync(envFile)) {
   }
 }
 
-const url = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+// Nimmt auch Adressen mit Pfad (z. B. .../rest/v1/) oder den Dashboard-Link
+// und macht daraus die reine Projektadresse https://<ref>.supabase.co
+function normalizeUrl(raw) {
+  const s = (raw || '').trim().replace(/^["']|["']$/g, '');
+  if (!s) return '';
+  let u;
+  try { u = new URL(/^https?:\/\//.test(s) ? s : `https://${s}`); } catch { return s; }
+  const dash = u.pathname.match(/\/project\/([a-z0-9]{10,})/);
+  if (/(^|\.)supabase\.com$/.test(u.hostname) && dash) return `https://${dash[1]}.supabase.co`;
+  return u.origin;
+}
+
+const rawUrl = process.env.SUPABASE_URL || '';
+const url = normalizeUrl(rawUrl);
+if (url && url !== rawUrl.trim().replace(/\/+$/, '')) console.log(`ℹ SUPABASE_URL korrigiert: "${rawUrl.trim()}" -> "${url}"`);
 const key = (process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
 
 if (!url || !key) {
   console.warn('⚠ SUPABASE_URL oder SUPABASE_KEY fehlt. Die App zeigt einen Hinweis statt der Anmeldung.');
-} else if (!/^https?:\/\//.test(url)) {
+} else if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url)) {
+  console.warn(`⚠ SUPABASE_URL sieht ungewöhnlich aus: "${url}" (erwartet: https://xxxx.supabase.co). Baue trotzdem.`);
+}
+if (url && !/^https?:\/\//.test(url)) {
   console.error(`✗ SUPABASE_URL sieht falsch aus: "${url}" (erwartet: https://xxxx.supabase.co)`);
   process.exit(1);
 }
