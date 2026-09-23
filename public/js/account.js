@@ -25,7 +25,14 @@ export function renderAccount(main) {
   ${standalone ? '' : `<section class="panel">
     <h2>Als App aufs Handy</h2>
     ${installPrompt ? '<button class="btn primary" id="install">App installieren</button>' : ios
-      ? '<p>In Safari unten auf <b>Teilen</b> (Quadrat mit Pfeil) tippen, dann <b>„Zum Home-Bildschirm“</b>.</p>'
+      ? `<ol class="steps">
+          <li>Diese Seite in <b>Safari</b> öffnen (nicht in Chrome oder dem Browser einer anderen App).</li>
+          <li>Auf <b>Teilen</b> tippen (Quadrat mit Pfeil nach oben, evtl. erst auf <b>⋯</b>).</li>
+          <li><b>„Zum Home-Bildschirm“</b> wählen.</li>
+          <li>Falls ein Schalter <b>„Als Web-App öffnen“</b> da ist: <b>einschalten</b>. Sonst öffnet sich nur Safari mit Adressleiste.</li>
+          <li><b>Hinzufügen</b> tippen. In der App einmal neu anmelden, die App hat einen eigenen Speicher und kennt die Safari-Anmeldung nicht.</li>
+        </ol>
+        <p class="muted small">Ein altes Symbol auf dem Home-Bildschirm, das noch mit Adressleiste aufgeht, bitte löschen und neu hinzufügen.</p>`
       : '<p>Im Browser-Menü (⋮) auf <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b> tippen.</p>'}
     <p class="muted small">Danach startet der Resell Tracker wie eine normale App, ohne Browserleiste.</p>
   </section>`}

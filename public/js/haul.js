@@ -54,8 +54,8 @@ export function haulForm() {
   const form = $('#haul-form', m);
   const rows = $('#haul-rows', m);
 
-  const addRow = (focus = true) => {
-    const prev = rows.lastElementChild;
+  const addRow = (focus = true, source = null) => {
+    const prev = source || rows.lastElementChild;
     const row = document.createElement('div');
     row.className = 'haul-row';
     row.innerHTML = `
@@ -66,9 +66,19 @@ export function haulForm() {
       <label>Größe<input data-k="size" maxlength="40"></label>
       <label>Zustand<select data-k="condition">${options(CONDITIONS, prev ? $('[data-k=condition]', prev).value : '', '–')}</select></label>
       <label>Einzelpreis<input data-k="price" inputmode="decimal" placeholder="optional"></label>
-      <div class="row-cost"><span class="muted small">Kosten</span><b data-cost>–</b><span class="muted small" data-ship></span></div>
-      <button type="button" class="icon-btn" data-remove aria-label="Zeile entfernen">✕</button>`;
-    rows.append(row);
+      <label class="qty">Anzahl<input data-k="qty" type="number" inputmode="numeric" min="1" max="99" value="1"></label>
+      <div class="row-cost"><span class="muted small">Kosten je Stück</span><b data-cost>–</b><span class="muted small" data-ship></span></div>
+      <div class="row-btns">
+        <button type="button" class="icon-btn" data-copy title="Zeile kopieren" aria-label="Zeile kopieren">⧉</button>
+        <button type="button" class="icon-btn" data-remove aria-label="Zeile entfernen">✕</button>
+      </div>`;
+    if (source) source.after(row); else rows.append(row);
+    if (source) {
+      for (const k of ['title', 'category', 'brand', 'size', 'condition', 'price', 'qty']) $(`[data-k=${k}]`, row).value = $(`[data-k=${k}]`, source).value;
+      const files = (rowFiles.get(source) || []).map((f) => ({ file: f.file, preview: URL.createObjectURL(f.file) }));
+      if (files.length) { rowFiles.set(row, files); showFiles(row); }
+    }
+    $('[data-copy]', row).addEventListener('click', () => { addRow(false, row); toast('Zeile kopiert. Größe oder Farbe anpassen, falls sie sich unterscheiden.'); });
     $('[data-remove]', row).addEventListener('click', () => {
       if (rows.children.length === 1) { toast('Ein Haul braucht mindestens einen Artikel'); return; }
       (rowFiles.get(row) || []).forEach((f) => URL.revokeObjectURL(f.preview));
@@ -79,15 +89,25 @@ export function haulForm() {
     $('input[type=file]', row).addEventListener('change', (e) => {
       const list = [...(rowFiles.get(row) || []), ...[...e.target.files].map((file) => ({ file, preview: URL.createObjectURL(file) }))].slice(0, 12);
       rowFiles.set(row, list);
-      const lbl = $('.img-mini', row);
-      lbl.style.backgroundImage = `url("${list[0].preview}")`;
-      lbl.classList.add('has-img');
-      $('b', lbl).textContent = list.length > 1 ? list.length : '';
+      showFiles(row);
       e.target.value = '';
     });
     if (focus) $('[data-k=title]', row).focus();
     update();
   };
+
+  function showFiles(row) {
+    const list = rowFiles.get(row) || [];
+    const lbl = $('.img-mini', row);
+    if (!list.length) return;
+    lbl.style.backgroundImage = `url("${list[0].preview}")`;
+    lbl.classList.add('has-img');
+    $('b', lbl).textContent = list.length > 1 ? list.length : '';
+  }
+
+  const isFilled = (it) => Boolean(it.title || it.purchase_input !== null || rowFiles.get(it.row)?.length);
+
+  const readQty = (row) => Math.min(99, Math.max(1, Math.floor(Number($('[data-k=qty]', row).value)) || 1));
 
   const readHaul = (strict) => {
     const f = Object.fromEntries(new FormData(form));
@@ -101,6 +121,7 @@ export function haulForm() {
         return {
           row, title: g('title').trim(), category: g('category'), brand: g('brand').trim(), size: g('size').trim(), condition: g('condition'),
           purchase_input: safe(g('price'), `Einzelpreis in Zeile ${i + 1}`),
+          qty: readQty(row),
         };
       }),
     };
@@ -108,13 +129,26 @@ export function haulForm() {
 
   function update() {
     const h = readHaul(false);
-    const alloc = allocateHaul(h, h.items.map((it) => ({ input: it.purchase_input })));
-    h.items.forEach((it, i) => {
-      const x = alloc.items[i];
-      $('[data-cost]', it.row).textContent = fmtMoney(x.purchase_price + x.shipping_in);
-      $('[data-ship]', it.row).textContent = x.shipping_in ? `inkl. ${fmtMoney(x.shipping_in)} Versand` : '';
+    // Leere Zeilen werden beim Speichern ignoriert, also auch hier nicht mitrechnen.
+    h.items.filter((it) => !isFilled(it)).forEach((it) => {
+      $('[data-cost]', it.row).textContent = '–';
+      $('[data-ship]', it.row).textContent = '';
     });
-    const n = h.items.length;
+    h.items = h.items.filter(isFilled);
+    const expanded = h.items.flatMap((it) => Array(it.qty).fill({ input: it.purchase_input }));
+    const alloc = allocateHaul(h, expanded);
+    let k = 0;
+    h.items.forEach((it) => {
+      const x = alloc.items[k];
+      const rowTotal = alloc.items.slice(k, k + it.qty).reduce((s, y) => s + y.purchase_price + y.shipping_in, 0);
+      k += it.qty;
+      $('[data-cost]', it.row).textContent = fmtMoney(x.purchase_price + x.shipping_in);
+      $('[data-ship]', it.row).textContent = [
+        x.shipping_in ? `inkl. ${fmtMoney(x.shipping_in)} Versand` : '',
+        it.qty > 1 ? `${it.qty} Stück = ${fmtMoney(rowTotal)}` : '',
+      ].filter(Boolean).join(' · ');
+    });
+    const n = expanded.length;
     $('#haul-count', m).textContent = `${n} Artikel`;
     const total = alloc.goods + h.shipping_cost;
     $('#haul-summary', m).innerHTML = `
@@ -145,15 +179,17 @@ export function haulForm() {
     try {
       const h = readHaul(true);
       if (!h.name) throw new Error('Bitte gib dem Haul einen Namen');
-      const items = h.items.filter((it) => it.title || it.purchase_input !== null || rowFiles.get(it.row)?.length);
+      const items = h.items.filter(isFilled);
       const untitled = items.find((it) => !it.title);
       if (untitled) throw new Error(`Zeile ${h.items.indexOf(untitled) + 1}: Titel fehlt`);
       if (!items.length) throw new Error('Trag mindestens einen Artikel ein');
+      const pieces = items.reduce((s, it) => s + it.qty, 0);
+      if (pieces > 200) throw new Error(`Maximal 200 Artikel pro Haul (gerade ${pieces})`);
       btn.disabled = true;
       const totalFiles = items.reduce((n, it) => n + (rowFiles.get(it.row)?.length || 0), 0);
       let done = 0;
       const payload = [];
-      for (const { row, ...it } of items) {
+      for (const { row, qty, ...it } of items) {
         const images = [];
         for (const f of rowFiles.get(row) || []) {
           btn.textContent = `Foto ${++done}/${totalFiles} …`;
@@ -161,7 +197,7 @@ export function haulForm() {
           uploaded.push(path);
           images.push(path);
         }
-        payload.push({ ...it, location: h.location, images });
+        for (let q = 0; q < qty; q++) payload.push({ ...it, location: h.location, images });
       }
       btn.textContent = 'Speichert …';
       const haulId = await createHaul(
@@ -171,7 +207,7 @@ export function haulForm() {
       for (const list of rowFiles.values()) list.forEach((f) => URL.revokeObjectURL(f.preview));
       await refresh();
       haulDetail(haulId);
-      toast(`Haul mit ${items.length} Artikeln angelegt`);
+      toast(`Haul mit ${payload.length} Artikeln angelegt`);
     } catch (ex) {
       await removeImages(uploaded).catch(() => {});
       err.textContent = ex.message;

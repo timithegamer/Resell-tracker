@@ -246,7 +246,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 20px 20px 100px; }
 .form .haul-items-head { margin: 4px 0 0; }
 #haul-rows { display: flex; flex-direction: column; gap: 8px; }
 .haul-row {
-  display: grid; grid-template-columns: 58px 2fr 1.3fr 1fr .7fr 1.2fr .9fr 110px 34px;
+  display: grid; grid-template-columns: 58px 2fr 1.3fr 1fr .7fr 1.2fr .9fr 64px 120px 34px;
   gap: 8px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
 }
 .haul-row label { font-size: .72rem; }
@@ -294,9 +294,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 20px 20px 100px; }
   .toolbar { grid-template-columns: 1fr 1fr; }
   .toolbar input { grid-column: 1 / -1; }
   .haul-row { grid-template-columns: 58px 1fr 1fr 34px; align-items: end; }
-  .haul-row .img-mini { grid-column: 1; grid-row: 1 / span 4; align-self: start; }
-  .haul-row [data-remove] { grid-column: 4; grid-row: 1 / span 4; align-self: start; }
-  .haul-row .span2 { grid-column: 2 / 4; }
+  .haul-row .img-mini { grid-column: 1; grid-row: 1 / span 5; align-self: start; }
+  .haul-row .row-btns { grid-column: 4; grid-row: 1 / span 5; align-self: start; }
+  .haul-row .span2, .haul-row .row-cost { grid-column: 2 / 4; }
   .detail { grid-template-columns: 1fr; }
   .detail-img { max-width: 320px; }
 }
@@ -493,3 +493,12 @@ code { font-size: .85em; background: var(--surface-2); padding: 1px 5px; border-
 
 .table-wrap { overflow-x: auto; max-width: 100%; }
 @media (max-width: 640px) { .data-table .hide-sm { display: none; } }
+
+.row-btns { display: flex; flex-direction: column; gap: 2px; }
+.row-btns [data-copy] { font-size: 1.15rem; }
+.haul-row .qty input { text-align: center; }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+/* Vollbild-App auf dem iPhone: Inhalt nicht unter die Statusleiste schieben */
+.topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+.auth { padding-top: max(20px, env(safe-area-inset-top)); }
+@media (max-width: 640px) { .topbar { padding-top: max(8px, env(safe-area-inset-top)); } .modal-head { padding-top: max(18px, env(safe-area-inset-top)); } }

@@ -6,7 +6,7 @@ import {
 } from './shared.js';
 import {
   state, articleById, haulById, articlePayload, createArticle, updateArticle, deleteArticle as removeArticle,
-  uploadImage, removeImages, hydrateImages, imageUrl,
+  uploadImage, removeImages, unusedImages, hydrateImages, imageUrl,
 } from './store.js';
 import {
   $, $$, esc, toast, parseMoney, moneyValue, today, fmtDate, options, statusOptions, profitClass,
@@ -75,6 +75,7 @@ export function articleDetail(id) {
       <div class="detail-actions">
         ${a.status !== 'verkauft' ? '<button class="btn primary" id="d-sell">Als verkauft markieren</button>' : '<button class="btn" id="d-sell">Verkauf bearbeiten</button>'}
         <button class="btn" id="d-edit">Bearbeiten</button>
+        <button class="btn" id="d-copy">Kopieren</button>
         <button class="btn" id="d-label">QR-Etikett</button>
         <button class="btn danger ghost" id="d-del">Löschen</button>
       </div>
@@ -96,6 +97,7 @@ export function articleDetail(id) {
   $('[data-haul]', m)?.addEventListener('click', (e) => { e.preventDefault(); haulDetail(haul.id); });
   $('#d-sell', m).addEventListener('click', () => sellForm(a));
   $('#d-edit', m).addEventListener('click', () => articleForm(a));
+  $('#d-copy', m).addEventListener('click', () => articleForm(null, null, a));
   $('#d-label', m).addEventListener('click', () => printLabels([a]));
   $('#d-del', m).addEventListener('click', () => deleteArticle(a));
   $('#quick-img', m)?.addEventListener('change', (e) => addPhotos(a, [...e.target.files]));
@@ -252,15 +254,19 @@ function sellForm(a) {
 
 // ================================================================ Formular
 
-export function articleForm(a = null, presetHaulId = null) {
-  const haulId = a ? a.haul_id : presetHaulId;
+// a = bestehender Artikel (bearbeiten), template = Artikel als Vorlage (kopieren)
+export function articleForm(a = null, presetHaulId = null, template = null) {
+  const haulId = a ? a.haul_id : template ? template.haul_id : presetHaulId;
   const haul = haulId ? haulById(haulId) : null;
-  const v = a || { category: 'Kleidung', status: 'lager', purchase_date: haul?.date || today(), images: [], listings: [] };
+  const v = a || (template
+    ? { ...template, status: 'lager', listings: [], sale_price: null, sale_date: null, sale_platform: '', sale_fees: 0, shipping_out: 0 }
+    : { category: 'Kleidung', status: 'lager', purchase_date: haul?.date || today(), images: [], listings: [] });
   const gallery = (v.images || []).map((path) => ({ path }));
   const removed = [];
 
   const m = openModal(`
-    ${modalHead(a ? `Artikel ${fmtArticleNo(a.article_no)} bearbeiten` : 'Neuer Artikel', haul ? `Teil von Haul „${esc(haul.name)}“` : 'Die Artikelnummer wird automatisch vergeben.')}
+    ${modalHead(a ? `Artikel ${fmtArticleNo(a.article_no)} bearbeiten` : template ? `Kopie von ${fmtArticleNo(template.article_no)}` : 'Neuer Artikel',
+      [haul && `Teil von Haul „${esc(haul.name)}“`, !a && 'Jede Kopie bekommt eine eigene Artikelnummer.'].filter(Boolean).join(' · '))}
     <form class="modal-body form" id="art-form">
       <label>Titel / Bezeichnung *<input name="title" required maxlength="160" value="${esc(v.title)}" placeholder="z. B. Nike Air Max 90 weiß"></label>
       <div class="grid3">
@@ -285,6 +291,7 @@ export function articleForm(a = null, presetHaulId = null) {
             ? `<label>Versand Einkauf<input disabled value="${a ? moneyValue(a.shipping_in) : ''}" placeholder="anteilig aus Haul"></label>`
             : `<label>Versand Einkauf<input name="shipping_in" inputmode="decimal" value="${moneyValue(v.shipping_in || null)}" placeholder="0,00"></label>`}
           <label>Eingekauft am<input name="purchase_date" type="date" value="${esc(v.purchase_date || '')}"></label>
+          ${a ? '' : `<label>Anzahl (gleiche Artikel)<input name="qty" type="number" inputmode="numeric" min="1" max="50" value="1"></label>`}
         </div>
         ${haul ? '<p class="muted small">Ohne Einzelpreis bekommt der Artikel seinen Anteil vom Gesamtpreis des Hauls. Der Versand wird immer anteilig verteilt.</p>' : ''}
       </fieldset>
@@ -374,11 +381,23 @@ export function articleForm(a = null, presetHaulId = null) {
         if (it.file && !it.path) { it.path = await uploadImage(it.file); uploaded.push(it.path); }
       }
       body.images = gallery.map((it) => it.path);
-      const saved = a ? await updateArticle(a.id, body) : await createArticle({ ...body, haul_id: haulId });
-      await removeImages(removed);
+      const qty = a ? 1 : Math.min(50, Math.max(1, Math.floor(Number(f.qty)) || 1));
+      let saved;
+      let first;
+      if (a) saved = await updateArticle(a.id, body);
+      else {
+        for (let i = 0; i < qty; i++) {
+          btn.textContent = qty > 1 ? `Legt an ${i + 1}/${qty} …` : 'Speichert …';
+          saved = await createArticle({ ...body, haul_id: haulId });
+          first ??= saved;
+        }
+      }
+      await removeImages(unusedImages(removed, (x) => x.id !== a?.id));
       await refresh();
-      articleDetail(saved.id);
-      toast(a ? 'Gespeichert' : `Artikel ${fmtArticleNo(saved.article_no)} angelegt`);
+      articleDetail((first || saved).id);
+      toast(a ? 'Gespeichert' : qty > 1
+        ? `${qty} Artikel angelegt: ${fmtArticleNo(first.article_no)} bis ${fmtArticleNo(saved.article_no)}`
+        : `Artikel ${fmtArticleNo(saved.article_no)} angelegt`);
     } catch (ex) {
       await removeImages(uploaded).catch(() => {});
       gallery.forEach((it) => { if (it.file) delete it.path; });

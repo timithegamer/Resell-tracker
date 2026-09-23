@@ -11,6 +11,8 @@ Läuft kostenlos mit **Supabase** (Konto, Datenbank, Fotos) und **Netlify** (Obe
   - Gesamtpreis + manche Einzelpreise → die mit Preis behalten ihn, der Rest geht auf die ohne
   - alle mit Preis → anteilig auf den Gesamtpreis skaliert
   - Versand immer anteilig zum Einkaufspreis
+  - **Anzahl** pro Zeile (z. B. 10 Powerbanks) und **⧉ Zeile kopieren**: jedes Stück wird ein eigener Artikel mit eigener Nummer
+- **Artikel kopieren** (auch mehrfach auf einmal), z. B. für gleiche Teile, die du später nachkaufst
 - **Crosslisting-Tracker**: abhaken, wo ein Artikel online ist. Nach dem Verkauf warnt die App, wo du ihn noch löschen musst.
 - **Ladenhüter-Warnung**: Lagerdauer pro Artikel, Markierung ab 30/60/90 Tagen, Vorschlag zur Preissenkung mit einem Tipp
 - **Auswertung**: Gewinn pro Monat, beste Einkaufsquelle, Plattform und Kategorie (mit ROI), Ø Tage bis Verkauf
@@ -64,9 +66,14 @@ Der eingebaute E-Mail-Versand von Supabase schickt nur wenige Mails pro Stunde u
 aus deinem Supabase-Team. Für ein Konto nur für dich reicht das, solange du dieselbe E-Mail benutzt.
 
 ### 7. Als App aufs Handy
-Netlify-Adresse im Handy öffnen, anmelden, dann:
-- **iPhone (Safari):** Teilen → „Zum Home-Bildschirm“
+Netlify-Adresse im Handy öffnen, dann:
+- **iPhone:** in **Safari** (nicht Chrome) Teilen → „Zum Home-Bildschirm“. Falls der Schalter **„Als Web-App öffnen“**
+  erscheint: einschalten, sonst gibt es Adressleiste und Safari-Leiste.
 - **Android (Chrome):** Menü ⋮ → „App installieren“
+
+Die installierte App hat einen eigenen Speicher, du musst dich dort einmal neu anmelden. Das ist die Anmeldung
+der App (E-Mail/Passwort aus Supabase), nicht Netlify. Fragt die Seite nach einem **Netlify**-Login, hast du
+eine geschützte Vorschau-Adresse erwischt: nimm die Hauptadresse `https://<dein-name>.netlify.app`.
 
 ## Gut zu wissen
 

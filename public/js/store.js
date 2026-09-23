@@ -86,7 +86,14 @@ export async function updateArticle(id, body) {
 
 export async function deleteArticle(a) {
   check(await sb.from('articles').delete().eq('id', a.id));
-  await removeImages(a.images);
+  await removeImages(unusedImages(a.images, (x) => x.id !== a.id));
+}
+
+// Kopierte Artikel teilen sich Fotos. Gelöscht wird ein Foto nur, wenn
+// kein anderer Artikel (für den `others` true liefert) es noch benutzt.
+export function unusedImages(paths, others) {
+  const used = new Set(state.articles.filter(others).flatMap((x) => x.images || []));
+  return (paths || []).filter((p) => !used.has(p));
 }
 
 // ---------------------------------------------------------------- Hauls
@@ -105,7 +112,7 @@ export async function dissolveHaul(id) {
 
 export async function deleteHaul(id) {
   const images = check(await sb.rpc('delete_haul', { p_haul: id }));
-  await removeImages(images || []);
+  await removeImages(unusedImages(images, (x) => x.haul_id !== id));
 }
 
 // ---------------------------------------------------------------- Nebenkosten
