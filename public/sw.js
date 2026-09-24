@@ -1,6 +1,6 @@
 // Service Worker: macht die App installierbar und startet die Oberfläche
 // auch bei schlechtem Netz. Daten kommen immer frisch von Supabase.
-const CACHE = 'resell-v2';
+const CACHE = 'resell-v3';
 const SHELL = [
   './', 'index.html', 'styles.css', 'icon.svg', 'manifest.webmanifest',
   'vendor/supabase-2.117.1.js', 'vendor/qrcode-2.0.4.mjs',

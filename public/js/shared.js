@@ -123,8 +123,14 @@ export function profitOf(a) {
   return a.sale_price - costOf(a) - (a.sale_fees || 0) - (a.shipping_out || 0);
 }
 
+// Summe der Zusatzkosten eines Artikels (Reinigung, Reparatur …).
+export function extraOf(a) {
+  return (a.extra_costs || []).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+}
+
+// Gesamtkosten: Einkaufspreis + Versand beim Einkauf + Zusatzkosten.
 export function costOf(a) {
-  return (a.purchase_price || 0) + (a.shipping_in || 0);
+  return (a.purchase_price || 0) + (a.shipping_in || 0) + extraOf(a);
 }
 
 const euro = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });

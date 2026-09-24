@@ -52,7 +52,7 @@ function pricePrompt(a) {
 
 Artikel:
 ${itemFacts(a)}
-- Mein Einkaufspreis inkl. Versand: ${fmtMoney(costOf(a))}${a.listed_price !== null ? `\n- Aktuell angeboten für: ${fmtMoney(a.listed_price)}` : ''}
+- Meine Kosten (Einkauf, Versand, Zusatzkosten): ${fmtMoney(costOf(a))}${a.listed_price !== null ? `\n- Aktuell angeboten für: ${fmtMoney(a.listed_price)}` : ''}
 ${photoNote(a, 'Fotos sind angehängt, nutze sie, um Modell und Zustand genauer einzuordnen.')}
 Vorgehen:
 - Recherchiere aktuelle Preise auf: ${platforms.join(', ')}.

@@ -65,6 +65,32 @@ create table if not exists public.expenses (
   created_at  timestamptz not null default now()
 );
 
+-- Zusatzkosten pro Artikel (Reinigung, Reparatur, Zubehör …) als Liste:
+-- [{"amount": <Cent>, "note": "Info"}]. Zählen zu den Kosten des Artikels.
+create or replace function public.valid_extra_costs(x jsonb)
+returns boolean
+language sql immutable
+set search_path = ''
+as $$
+  select jsonb_typeof(x) = 'array' and jsonb_array_length(x) <= 50 and not exists (
+    select 1 from jsonb_array_elements(x) e
+    where jsonb_typeof(e) <> 'object'
+       or coalesce(jsonb_typeof(e->'amount'), '') <> 'number'
+       or (e->>'amount')::numeric <> floor((e->>'amount')::numeric)
+       or (e->>'amount')::numeric not between 0 and 10000000
+       or coalesce(jsonb_typeof(e->'note'), 'string') <> 'string'
+       or char_length(coalesce(e->>'note', '')) > 120
+  )
+$$;
+
+alter table public.articles add column if not exists extra_costs jsonb not null default '[]';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'articles_extra_costs_valid') then
+    alter table public.articles add constraint articles_extra_costs_valid check (public.valid_extra_costs(extra_costs));
+  end if;
+end $$;
+
 -- Zähler für die fortlaufende Artikelnummer pro Nutzer (nur über den Trigger erreichbar).
 create table if not exists public.article_counters (
   user_id uuid primary key references auth.users on delete cascade,

@@ -502,3 +502,20 @@ code { font-size: .85em; background: var(--surface-2); padding: 1px 5px; border-
 .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
 .auth { padding-top: max(20px, env(safe-area-inset-top)); }
 @media (max-width: 640px) { .topbar { padding-top: max(8px, env(safe-area-inset-top)); } .modal-head { padding-top: max(18px, env(safe-area-inset-top)); } }
+
+/* Rechnung & Zusatzkosten */
+.money.calc td.op { width: 18px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; padding-right: 6px; }
+.money.calc th { width: auto; }
+.money.calc td.val { text-align: right; padding-right: 12px; white-space: nowrap; }
+.money.calc td.note { font-size: .82rem; color: var(--muted); }
+.money.calc tr.sum th, .money.calc tr.sum td { border-bottom: 2px solid var(--text); }
+.money.calc tr.gap th, .money.calc tr.gap td { padding-top: 14px; }
+.money.calc tr.extra th { color: var(--text); }
+.small-x { width: 26px; height: 26px; font-size: .8rem; }
+.extras { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.x-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; width: 100%; }
+.x-form label:first-child { width: 110px; }
+.x-form .grow { flex: 1 1 180px; }
+.x-rows { display: flex; flex-direction: column; gap: 8px; }
+.x-rows:empty { display: none; }
+.x-row { display: grid; grid-template-columns: 110px 1fr 34px; gap: 8px; align-items: center; }

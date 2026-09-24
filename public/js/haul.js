@@ -1,6 +1,6 @@
 // Hauls: mehrere Teile auf einmal erfassen, Übersicht und Detail.
 
-import { CATEGORIES, CONDITIONS, allocateHaul, fmtMoney } from './shared.js';
+import { CATEGORIES, CONDITIONS, allocateHaul, fmtMoney, extraOf } from './shared.js';
 import { state, haulById, createHaul, updateHaul, dissolveHaul, deleteHaul, uploadImage, removeImages, hydrateImages } from './store.js';
 import { $, $$, esc, toast, parseMoney, moneyValue, today, fmtDate, options, profitClass, openModal, modalHead, confirmDialog, guard } from './ui.js';
 import { refresh } from './app.js';
@@ -224,6 +224,7 @@ export function haulStats(h) {
   const s = computeStats(items);
   s.items = items;
   s.cost = s.invested;
+  s.extra = items.reduce((sum, a) => sum + extraOf(a), 0);
   s.back = s.net + s.invested; // Netto-Erlöse
   return s;
 }
@@ -266,7 +267,7 @@ export function haulDetail(id) {
     ${modalHead(`Haul: ${esc(h.name)}`, [fmtDate(h.date), h.source, `${s.count} Artikel`].filter(Boolean).map(esc).join(' · '))}
     <div class="modal-body">
       <section class="stats compact">
-        <div class="stat"><span>Kosten gesamt</span><strong>${fmtMoney(s.cost)}</strong><small>Ware ${fmtMoney(s.cost - h.shipping_cost)} · Versand ${fmtMoney(h.shipping_cost)}</small></div>
+        <div class="stat"><span>Kosten gesamt</span><strong>${fmtMoney(s.cost)}</strong><small>Ware ${fmtMoney(s.cost - h.shipping_cost - s.extra)} · Versand ${fmtMoney(h.shipping_cost)}${s.extra ? ` · Zusatzkosten ${fmtMoney(s.extra)}` : ''}</small></div>
         <div class="stat"><span>Verkauft</span><strong>${s.sold}/${s.count}</strong><small>Umsatz ${fmtMoney(s.revenue)}</small></div>
         <div class="stat"><span>Gewinn realisiert</span><strong class="${profitClass(s.profit)}">${fmtMoney(s.profit)}</strong><small>nur verkaufte Teile</small></div>
         <div class="stat"><span>Ergebnis</span><strong class="${profitClass(s.net)}">${fmtMoney(s.net)}</strong><small>Erlöse minus Haul-Kosten</small></div>

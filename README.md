@@ -13,6 +13,8 @@ Läuft kostenlos mit **Supabase** (Konto, Datenbank, Fotos) und **Netlify** (Obe
   - Versand immer anteilig zum Einkaufspreis
   - **Anzahl** pro Zeile (z. B. 10 Powerbanks) und **⧉ Zeile kopieren**: jedes Stück wird ein eigener Artikel mit eigener Nummer
 - **Artikel kopieren** (auch mehrfach auf einmal), z. B. für gleiche Teile, die du später nachkaufst
+- **Zusatzkosten pro Artikel**, beliebig viele, jeweils mit Betrag und Info (Reinigung, Reparatur, Ersatzteile …).
+  Sie zählen zu den Kosten, der Artikel zeigt die komplette Rechnung bis zum Gewinn.
 - **Crosslisting-Tracker**: abhaken, wo ein Artikel online ist. Nach dem Verkauf warnt die App, wo du ihn noch löschen musst.
 - **Ladenhüter-Warnung**: Lagerdauer pro Artikel, Markierung ab 30/60/90 Tagen, Vorschlag zur Preissenkung mit einem Tipp
 - **Auswertung**: Gewinn pro Monat, beste Einkaufsquelle, Plattform und Kategorie (mit ROI), Ø Tage bis Verkauf
@@ -74,6 +76,12 @@ Netlify-Adresse im Handy öffnen, dann:
 Die installierte App hat einen eigenen Speicher, du musst dich dort einmal neu anmelden. Das ist die Anmeldung
 der App (E-Mail/Passwort aus Supabase), nicht Netlify. Fragt die Seite nach einem **Netlify**-Login, hast du
 eine geschützte Vorschau-Adresse erwischt: nimm die Hauptadresse `https://<dein-name>.netlify.app`.
+
+## Updates einspielen
+
+Wenn sich `supabase/schema.sql` geändert hat (steht dann im Commit), das Skript einfach nochmal komplett im
+SQL Editor ausführen. Es ist dafür gebaut: vorhandene Daten bleiben erhalten, nur Neues kommt dazu.
+Die Oberfläche aktualisiert Netlify bei jedem Push automatisch.
 
 ## Gut zu wissen
 

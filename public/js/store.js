@@ -30,6 +30,7 @@ function translate(msg) {
   if (/articles_check/i.test(msg)) return 'Verkaufte Artikel brauchen einen Verkaufspreis';
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return 'Keine Verbindung. Bist du online?';
   if (/JWT expired/i.test(msg)) return 'Sitzung abgelaufen, bitte neu anmelden';
+  if (/extra_costs/i.test(msg)) return 'Die Datenbank kennt die Zusatzkosten noch nicht. Bitte supabase/schema.sql im Supabase SQL Editor nochmal ausführen.';
   return msg;
 }
 
@@ -37,6 +38,7 @@ function translate(msg) {
 const MONEY = ['purchase_input', 'purchase_price', 'shipping_in', 'listed_price', 'sale_price', 'sale_fees', 'shipping_out', 'total_price', 'shipping_cost', 'amount'];
 function normalize(row) {
   for (const k of MONEY) if (row[k] !== null && row[k] !== undefined) row[k] = Number(row[k]);
+  if ('title' in row) row.extra_costs = (row.extra_costs || []).map((x) => ({ amount: Number(x.amount) || 0, note: x.note || '' }));
   return row;
 }
 
@@ -64,7 +66,7 @@ export async function loadAll() {
 
 export const ARTICLE_FIELDS = ['title', 'category', 'brand', 'size', 'color', 'condition', 'notes', 'location',
   'purchase_input', 'shipping_in', 'purchase_date', 'status', 'listed_price', 'listings', 'sale_price', 'sale_date',
-  'sale_platform', 'sale_fees', 'shipping_out', 'images'];
+  'sale_platform', 'sale_fees', 'shipping_out', 'images', 'extra_costs'];
 
 export function articlePayload(a) {
   return Object.fromEntries(ARTICLE_FIELDS.map((k) => [k, a[k]]));

@@ -2,7 +2,7 @@
 
 import {
   CATEGORIES, CONDITIONS, STATUSES, PLATFORMS, ONLINE_PLATFORMS,
-  profitOf, costOf, fmtMoney, fmtArticleNo, ageDays, ageLevel,
+  profitOf, costOf, extraOf, fmtMoney, fmtArticleNo, ageDays, ageLevel,
 } from './shared.js';
 import {
   state, articleById, haulById, articlePayload, createArticle, updateArticle, deleteArticle as removeArticle,
@@ -25,31 +25,12 @@ export function articleDetail(id) {
   const a = articleById(id);
   if (!a) { toast('Artikel nicht gefunden', 'err'); return; }
   const haul = a.haul_id ? haulById(a.haul_id) : null;
-  const p = profitOf(a);
-  const cost = costOf(a);
-  const margin = p !== null && a.sale_price ? Math.round((p / a.sale_price) * 100) : null;
   const days = ageDays(a);
   const info = [
     ['Kategorie', a.category], ['Marke', a.brand], ['Größe', a.size], ['Farbe', a.color], ['Zustand', a.condition],
     ['Lagerort', a.location], ['Eingekauft am', fmtDate(a.purchase_date)],
     [a.status === 'verkauft' ? 'Verkauft nach' : 'Auf Lager seit', `${days} Tagen`],
   ].filter(([, v]) => v).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
-
-  const rows = [
-    ['Einkaufspreis', fmtMoney(a.purchase_price), haul && a.purchase_input === null ? 'anteilig aus Haul' : ''],
-    ['Versand Einkauf', fmtMoney(a.shipping_in), haul ? 'anteilig aus Haul' : ''],
-    ['Kosten gesamt', `<b>${fmtMoney(cost)}</b>`, ''],
-  ];
-  if (a.status === 'verkauft') {
-    rows.push(
-      ['Verkaufspreis', fmtMoney(a.sale_price), [a.sale_platform, fmtDate(a.sale_date)].filter(Boolean).join(' · ')],
-      ...(a.sale_fees ? [['Gebühren', '−' + fmtMoney(a.sale_fees), '']] : []),
-      ...(a.shipping_out ? [['Versand Verkauf', '−' + fmtMoney(a.shipping_out), '']] : []),
-      ['Gewinn', `<b class="${profitClass(p)}">${fmtMoney(p)}</b>`, margin !== null ? `Marge ${margin} %` : ''],
-    );
-  } else if (a.listed_price !== null) {
-    rows.push(['Angebotspreis', fmtMoney(a.listed_price), `möglicher Gewinn ${fmtMoney(a.listed_price - cost)} vor Gebühren`]);
-  }
 
   const imgs = a.images || [];
   const m = openModal(`
@@ -66,7 +47,15 @@ export function articleDetail(id) {
         </div>
         <div>
           <dl class="info">${info}</dl>
-          <table class="money">${rows.map(([k, v, n]) => `<tr><th>${k}</th><td>${v}</td><td class="muted">${esc(n)}</td></tr>`).join('')}</table>
+          ${calcTable(a, haul)}
+          <div class="extras">
+            <button class="btn small" id="x-toggle" type="button">+ Zusatzkosten</button>
+            <form class="x-form" id="x-form" hidden>
+              <label>Betrag<input name="amount" inputmode="decimal" placeholder="0,00" required></label>
+              <label class="grow">Info<input name="note" maxlength="120" placeholder="z. B. Reinigung, neuer Reißverschluss"></label>
+              <button class="btn small primary" type="submit">Hinzufügen</button>
+            </form>
+          </div>
           ${a.notes ? `<p class="notes">${esc(a.notes)}</p>` : ''}
         </div>
       </div>
@@ -103,8 +92,53 @@ export function articleDetail(id) {
   $('#quick-img', m)?.addEventListener('change', (e) => addPhotos(a, [...e.target.files]));
   $$('[data-listing]', m).forEach((b) => b.addEventListener('click', () => toggleListing(a, b.dataset.listing)));
   $$('[data-delisted]', m).forEach((b) => b.addEventListener('click', () => markDelisted(a, b.dataset.delisted)));
+  $('#x-toggle', m).addEventListener('click', () => {
+    const f = $('#x-form', m);
+    f.hidden = !f.hidden;
+    if (!f.hidden) f.amount.focus();
+  });
+  $('#x-form', m).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    let amount;
+    try { amount = parseMoney(f.amount.value, 'Betrag'); } catch (ex) { toast(ex.message, 'err'); return; }
+    if (!amount) { toast('Bitte einen Betrag eintragen', 'err'); return; }
+    await quickUpdate(a, { extra_costs: [...(a.extra_costs || []), { amount, note: f.note.value.trim().slice(0, 120) }] }, 'Zusatzkosten hinzugefügt');
+  });
+  $$('[data-x-del]', m).forEach((b) => b.addEventListener('click', () => {
+    const i = Number(b.dataset.xDel);
+    const x = a.extra_costs[i];
+    quickUpdate(a, { extra_costs: a.extra_costs.filter((_, j) => j !== i) }, `${fmtMoney(x.amount)} ${x.note || 'Zusatzkosten'} entfernt`);
+  }));
   $('#stale-price', m)?.addEventListener('click', (e) => quickUpdate(a, { listed_price: Number(e.target.dataset.price) }, 'Preis gesenkt'));
   wirePrompts(m);
+}
+
+// Die Rechnung des Artikels: Kosten, und falls verkauft, was davon übrig bleibt.
+function calcTable(a, haul) {
+  const cost = costOf(a);
+  const row = (op, label, value, note = '', cls = '') =>
+    `<tr class="${cls}"><td class="op">${op}</td><th>${label}</th><td class="val">${value}</td><td class="note">${note}</td></tr>`;
+  const extras = a.extra_costs || [];
+  let html = row('', 'Einkaufspreis', fmtMoney(a.purchase_price), haul && a.purchase_input === null ? 'anteilig aus Haul' : '');
+  html += row('+', 'Versand Einkauf', fmtMoney(a.shipping_in), haul ? 'anteilig aus Haul' : '');
+  extras.forEach((x, i) => {
+    html += row('+', esc(x.note || 'Zusatzkosten'), fmtMoney(x.amount),
+      `<button class="icon-btn small-x" data-x-del="${i}" aria-label="${esc(x.note || 'Zusatzkosten')} entfernen" title="Entfernen">✕</button>`, 'extra');
+  });
+  html += row('=', 'Kosten gesamt', `<b>${fmtMoney(cost)}</b>`, extras.length ? `davon ${fmtMoney(extraOf(a))} Zusatzkosten` : '', 'sum');
+  if (a.status === 'verkauft') {
+    const p = profitOf(a);
+    const margin = a.sale_price ? Math.round((p / a.sale_price) * 100) : null;
+    html += row('', 'Verkaufspreis', fmtMoney(a.sale_price), esc([a.sale_platform, fmtDate(a.sale_date)].filter(Boolean).join(' · ')), 'gap');
+    if (a.sale_fees) html += row('−', 'Gebühren', fmtMoney(a.sale_fees));
+    if (a.shipping_out) html += row('−', 'Versand Verkauf', fmtMoney(a.shipping_out));
+    html += row('−', 'Kosten gesamt', fmtMoney(cost));
+    html += row('=', 'Gewinn', `<b class="${profitClass(p)}">${fmtMoney(p)}</b>`, margin !== null ? `Marge ${margin} %` : '', 'sum');
+  } else if (a.listed_price !== null) {
+    html += row('', 'Angebotspreis', fmtMoney(a.listed_price), `möglicher Gewinn ${fmtMoney(a.listed_price - cost)} vor Gebühren`, 'gap');
+  }
+  return `<table class="money calc">${html}</table>`;
 }
 
 function staleAdvice(a) {
@@ -296,6 +330,12 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
         ${haul ? '<p class="muted small">Ohne Einzelpreis bekommt der Artikel seinen Anteil vom Gesamtpreis des Hauls. Der Versand wird immer anteilig verteilt.</p>' : ''}
       </fieldset>
       <fieldset>
+        <legend>Zusatzkosten</legend>
+        <div class="x-rows" id="x-rows"></div>
+        <button type="button" class="btn small" id="x-row-add">+ Zusatzkosten</button>
+        <p class="muted small">Alles, was nach dem Einkauf noch für diesen Artikel anfällt, z. B. Reinigung, Reparatur, Ersatzteile. Zählt zu den Kosten.</p>
+      </fieldset>
+      <fieldset>
         <legend>Verkauf</legend>
         <div class="grid3">
           <label>Status<select name="status">${statusOptions(v.status)}</select></label>
@@ -321,6 +361,20 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
   const toggleSold = () => form.classList.toggle('is-sold', form.status.value === 'verkauft');
   form.status.addEventListener('change', toggleSold);
   toggleSold();
+
+  const xRows = $('#x-rows', m);
+  const addXRow = (x = { amount: null, note: '' }) => {
+    const r = document.createElement('div');
+    r.className = 'x-row';
+    r.innerHTML = `<input data-x="amount" inputmode="decimal" placeholder="Betrag" value="${moneyValue(x.amount)}" aria-label="Betrag">
+      <input data-x="note" maxlength="120" placeholder="Info, z. B. Reinigung" value="${esc(x.note)}" aria-label="Info">
+      <button type="button" class="icon-btn" aria-label="Entfernen">✕</button>`;
+    $('button', r).addEventListener('click', () => r.remove());
+    xRows.append(r);
+    return r;
+  };
+  (v.extra_costs || []).forEach((x) => addXRow(x));
+  $('#x-row-add', m).addEventListener('click', () => $('[data-x=amount]', addXRow()).focus());
 
   const renderGallery = () => {
     const g = $('#gallery', m);
@@ -371,6 +425,13 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
         sale_fees: parseMoney(f.sale_fees, 'Gebühren') || 0,
         shipping_out: parseMoney(f.shipping_out, 'Versand') || 0,
         listings: v.listings || [],
+        extra_costs: $$('.x-row', xRows).map((r, i) => ({
+          amount: parseMoney($('[data-x=amount]', r).value, `Zusatzkosten Zeile ${i + 1}`),
+          note: $('[data-x=note]', r).value.trim().slice(0, 120),
+        })).filter((x) => x.amount !== null || x.note).map((x, i) => {
+          if (x.amount === null) throw new Error(`Zusatzkosten „${x.note}“: Betrag fehlt`);
+          return x;
+        }),
       };
       if (!haul && body.purchase_input === null) body.purchase_input = 0;
       if (body.status === 'verkauft' && body.sale_price === null) throw new Error('Bitte einen Verkaufspreis eintragen');
