@@ -15,6 +15,8 @@ Läuft kostenlos mit **Supabase** (Konto, Datenbank, Fotos) und **Netlify** (Obe
 - **Artikel kopieren** (auch mehrfach auf einmal), z. B. für gleiche Teile, die du später nachkaufst
 - **Zusatzkosten pro Artikel**, beliebig viele, jeweils mit Betrag und Info (Reinigung, Reparatur, Ersatzteile …).
   Sie zählen zu den Kosten, der Artikel zeigt die komplette Rechnung bis zum Gewinn.
+- **Verkauf nachverfolgen**: Käufer eintragen, dann *Verkauft → Versendet* (mit optionaler Sendungsnummer)
+  *→ Angekommen & akzeptiert*. Das Inventar zeigt, was noch versendet werden muss.
 - **Crosslisting-Tracker**: abhaken, wo ein Artikel online ist. Nach dem Verkauf warnt die App, wo du ihn noch löschen musst.
 - **Ladenhüter-Warnung**: Lagerdauer pro Artikel, Markierung ab 30/60/90 Tagen, Vorschlag zur Preissenkung mit einem Tipp
 - **Auswertung**: Gewinn pro Monat, beste Einkaufsquelle, Plattform und Kategorie (mit ROI), Ø Tage bis Verkauf

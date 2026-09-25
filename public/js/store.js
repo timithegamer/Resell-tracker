@@ -2,6 +2,7 @@
 
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { resizeImage } from './ui.js';
+import { isSold } from './shared.js';
 
 export const configured = Boolean(SUPABASE_URL && SUPABASE_KEY && !SUPABASE_URL.includes('DEIN-PROJEKT'));
 
@@ -27,10 +28,10 @@ function check({ data, error }) {
 function translate(msg) {
   if (/Invalid login credentials/i.test(msg)) return 'E-Mail oder Passwort falsch';
   if (/violates row-level security/i.test(msg)) return 'Keine Berechtigung';
-  if (/articles_check/i.test(msg)) return 'Verkaufte Artikel brauchen einen Verkaufspreis';
+  if (/articles_check\b|articles_sold_needs_price/i.test(msg)) return 'Verkaufte Artikel brauchen einen Verkaufspreis';
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return 'Keine Verbindung. Bist du online?';
   if (/JWT expired/i.test(msg)) return 'Sitzung abgelaufen, bitte neu anmelden';
-  if (/extra_costs/i.test(msg)) return 'Die Datenbank kennt die Zusatzkosten noch nicht. Bitte supabase/schema.sql im Supabase SQL Editor nochmal ausführen.';
+  if (/extra_costs|buyer|tracking_number|shipped_at|completed_at|articles_status_valid|articles_status_check/i.test(msg)) return 'Die Datenbank ist noch nicht auf dem neuesten Stand. Bitte supabase/schema.sql im Supabase SQL Editor nochmal ausführen.';
   return msg;
 }
 
@@ -66,7 +67,7 @@ export async function loadAll() {
 
 export const ARTICLE_FIELDS = ['title', 'category', 'brand', 'size', 'color', 'condition', 'notes', 'location',
   'purchase_input', 'shipping_in', 'purchase_date', 'status', 'listed_price', 'listings', 'sale_price', 'sale_date',
-  'sale_platform', 'sale_fees', 'shipping_out', 'images', 'extra_costs'];
+  'sale_platform', 'sale_fees', 'shipping_out', 'images', 'extra_costs', 'buyer', 'tracking_number', 'shipped_at', 'completed_at'];
 
 export function articlePayload(a) {
   return Object.fromEntries(ARTICLE_FIELDS.map((k) => [k, a[k]]));
@@ -74,7 +75,10 @@ export function articlePayload(a) {
 
 function cleanArticle(body) {
   const b = { ...body };
-  if (b.status !== 'verkauft') Object.assign(b, { sale_price: null, sale_date: null, sale_platform: '', sale_fees: 0, shipping_out: 0 });
+  if (!isSold(b)) Object.assign(b, { sale_price: null, sale_date: null, sale_platform: '', sale_fees: 0, shipping_out: 0, buyer: '', tracking_number: '' });
+  // Datum nur behalten, wenn der Schritt auch erreicht ist.
+  if (!['versendet', 'abgeschlossen'].includes(b.status)) b.shipped_at = null;
+  if (b.status !== 'abgeschlossen') b.completed_at = null;
   return b;
 }
 

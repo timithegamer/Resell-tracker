@@ -17,7 +17,14 @@ export const STATUSES = {
   lager: 'Auf Lager',
   gelistet: 'Online gelistet',
   verkauft: 'Verkauft',
+  versendet: 'Versendet',
+  abgeschlossen: 'Abgeschlossen',
 };
+
+// Ab „Verkauft“ zählt ein Artikel als verkauft (Gewinn, Auswertung, DAC7).
+// Versendet und Abgeschlossen (angekommen & akzeptiert) verfolgen nur den Versand.
+export const SOLD_STATUSES = ['verkauft', 'versendet', 'abgeschlossen'];
+export const isSold = (a) => SOLD_STATUSES.includes(a.status);
 
 export const PLATFORMS = [
   'Vinted', 'eBay', 'Kleinanzeigen', 'willhaben', 'Shpock', 'Depop',
@@ -40,7 +47,7 @@ export const DAC7 = { sales: 30, revenue: 200000 };
 // Lagerdauer in Tagen (ab Einkaufsdatum, sonst ab Anlage).
 export function ageDays(a, now = new Date()) {
   const start = a.purchase_date ? new Date(a.purchase_date + 'T00:00:00') : new Date(a.created_at);
-  const end = a.status === 'verkauft' && a.sale_date ? new Date(a.sale_date + 'T00:00:00') : now;
+  const end = isSold(a) && a.sale_date ? new Date(a.sale_date + 'T00:00:00') : now;
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
@@ -119,7 +126,7 @@ export function allocateHaul(haul, items) {
 
 // Gewinn eines verkauften Artikels, sonst null.
 export function profitOf(a) {
-  if (a.status !== 'verkauft' || !Number.isInteger(a.sale_price)) return null;
+  if (!isSold(a) || !Number.isInteger(a.sale_price)) return null;
   return a.sale_price - costOf(a) - (a.sale_fees || 0) - (a.shipping_out || 0);
 }
 

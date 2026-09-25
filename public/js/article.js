@@ -2,7 +2,7 @@
 
 import {
   CATEGORIES, CONDITIONS, STATUSES, PLATFORMS, ONLINE_PLATFORMS,
-  profitOf, costOf, extraOf, fmtMoney, fmtArticleNo, ageDays, ageLevel,
+  profitOf, costOf, extraOf, fmtMoney, fmtArticleNo, ageDays, ageLevel, isSold, SOLD_STATUSES,
 } from './shared.js';
 import {
   state, articleById, haulById, articlePayload, createArticle, updateArticle, deleteArticle as removeArticle,
@@ -10,7 +10,7 @@ import {
 } from './store.js';
 import {
   $, $$, esc, toast, parseMoney, moneyValue, today, fmtDate, options, statusOptions, profitClass,
-  openModal, modalHead, confirmDialog, guard,
+  openModal, modalHead, confirmDialog, guard, copyText,
 } from './ui.js';
 import { refresh } from './app.js';
 import { haulDetail } from './haul.js';
@@ -29,7 +29,7 @@ export function articleDetail(id) {
   const info = [
     ['Kategorie', a.category], ['Marke', a.brand], ['Größe', a.size], ['Farbe', a.color], ['Zustand', a.condition],
     ['Lagerort', a.location], ['Eingekauft am', fmtDate(a.purchase_date)],
-    [a.status === 'verkauft' ? 'Verkauft nach' : 'Auf Lager seit', `${days} Tagen`],
+    [isSold(a) ? 'Verkauft nach' : 'Auf Lager seit', `${days} Tagen`],
   ].filter(([, v]) => v).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
 
   const imgs = a.images || [];
@@ -60,9 +60,10 @@ export function articleDetail(id) {
         </div>
       </div>
       ${staleAdvice(a)}
+      ${trackSection(a)}
       ${listingSection(a)}
       <div class="detail-actions">
-        ${a.status !== 'verkauft' ? '<button class="btn primary" id="d-sell">Als verkauft markieren</button>' : '<button class="btn" id="d-sell">Verkauf bearbeiten</button>'}
+        ${!isSold(a) ? '<button class="btn primary" id="d-sell">Als verkauft markieren</button>' : '<button class="btn" id="d-sell">Verkauf bearbeiten</button>'}
         <button class="btn" id="d-edit">Bearbeiten</button>
         <button class="btn" id="d-copy">Kopieren</button>
         <button class="btn" id="d-label">QR-Etikett</button>
@@ -85,6 +86,13 @@ export function articleDetail(id) {
   $('#main-img', m)?.addEventListener('click', (e) => { if (e.target.src) window.open(e.target.src, '_blank', 'noopener'); });
   $('[data-haul]', m)?.addEventListener('click', (e) => { e.preventDefault(); haulDetail(haul.id); });
   $('#d-sell', m).addEventListener('click', () => sellForm(a));
+  $('#t-ship', m)?.addEventListener('click', () => shipForm(a));
+  $('#t-done', m)?.addEventListener('click', () => quickUpdate(a, { status: 'abgeschlossen', completed_at: today() }, 'Abgeschlossen: angekommen und akzeptiert'));
+  $('#t-back', m)?.addEventListener('click', () => {
+    const prev = a.status === 'abgeschlossen' ? 'versendet' : 'verkauft';
+    quickUpdate(a, { status: prev }, `Zurück auf „${STATUSES[prev]}“`);
+  });
+  $('#t-copy', m)?.addEventListener('click', () => copyText(a.tracking_number, 'Sendungsnummer kopiert'));
   $('#d-edit', m).addEventListener('click', () => articleForm(a));
   $('#d-copy', m).addEventListener('click', () => articleForm(null, null, a));
   $('#d-label', m).addEventListener('click', () => printLabels([a]));
@@ -127,7 +135,7 @@ function calcTable(a, haul) {
       `<button class="icon-btn small-x" data-x-del="${i}" aria-label="${esc(x.note || 'Zusatzkosten')} entfernen" title="Entfernen">✕</button>`, 'extra');
   });
   html += row('=', 'Kosten gesamt', `<b>${fmtMoney(cost)}</b>`, extras.length ? `davon ${fmtMoney(extraOf(a))} Zusatzkosten` : '', 'sum');
-  if (a.status === 'verkauft') {
+  if (isSold(a)) {
     const p = profitOf(a);
     const margin = a.sale_price ? Math.round((p / a.sale_price) * 100) : null;
     html += row('', 'Verkaufspreis', fmtMoney(a.sale_price), esc([a.sale_platform, fmtDate(a.sale_date)].filter(Boolean).join(' · ')), 'gap');
@@ -141,8 +149,61 @@ function calcTable(a, haul) {
   return `<table class="money calc">${html}</table>`;
 }
 
+// Verlauf nach dem Verkauf: Verkauft → Versendet → Angekommen & akzeptiert.
+function trackSection(a) {
+  if (!isSold(a)) return '';
+  const step = SOLD_STATUSES.indexOf(a.status);
+  const cls = (i) => (i < step ? 'done' : i === step ? 'done current' : '');
+  const sold = [fmtDate(a.sale_date), a.buyer && `an ${esc(a.buyer)}`].filter(Boolean).join(' · ');
+  const shipped = step >= 1 ? [fmtDate(a.shipped_at), a.tracking_number && `<span class="mono">${esc(a.tracking_number)}</span>
+      <button class="linkish" id="t-copy" type="button">kopieren</button>`].filter(Boolean).join(' · ') : 'noch nicht';
+  const done = step >= 2 ? fmtDate(a.completed_at) || 'ja' : 'noch nicht';
+  const next = [
+    '<button class="btn primary" id="t-ship">Als versendet markieren</button>',
+    '<button class="btn primary" id="t-done">Angekommen &amp; akzeptiert</button><button class="btn" id="t-ship">Versand bearbeiten</button>',
+    '<button class="btn" id="t-ship">Versand bearbeiten</button>',
+  ][step];
+  return `<div class="track">
+    <ol class="track-steps">
+      <li class="${cls(0)}"><b>Verkauft</b><small>${sold || '&nbsp;'}</small></li>
+      <li class="${cls(1)}"><b>Versendet</b><small>${shipped}</small></li>
+      <li class="${cls(2)}"><b>Angekommen &amp; akzeptiert</b><small>${done}</small></li>
+    </ol>
+    <div class="row-actions">${next}${step > 0 ? '<button class="btn ghost small" id="t-back">Schritt zurück</button>' : ''}</div>
+  </div>`;
+}
+
+function shipForm(a) {
+  const m = openModal(`
+    ${modalHead(a.status === 'verkauft' ? 'Als versendet markieren' : 'Versand bearbeiten', `${esc(fmtArticleNo(a.article_no))} ${esc(a.title)}${a.buyer ? ` · an ${esc(a.buyer)}` : ''}`)}
+    <form class="modal-body form" id="ship-form">
+      <div class="grid2">
+        <label>Versendet am<input name="shipped_at" type="date" value="${esc(a.shipped_at || today())}"></label>
+        <label>Sendungsnummer (optional)<input name="tracking_number" maxlength="80" value="${esc(a.tracking_number)}" placeholder="z. B. RR123456789AT" autocomplete="off" autocapitalize="characters"></label>
+        ${a.buyer ? '' : '<label>Käufer (optional)<input name="buyer" maxlength="120" placeholder="Name oder Nutzername" autocomplete="off"></label>'}
+      </div>
+      <p class="error" id="ship-error"></p>
+    </form>
+    <div class="modal-foot">
+      <button class="btn" data-close>Abbrechen</button>
+      <button class="btn primary" id="ship-save">Speichern</button>
+    </div>`);
+  const form = $('#ship-form', m);
+  const save = async () => {
+    const f = Object.fromEntries(new FormData(form));
+    await quickUpdate(a, {
+      status: a.status === 'verkauft' ? 'versendet' : a.status,
+      shipped_at: f.shipped_at || today(),
+      tracking_number: f.tracking_number.trim(),
+      ...(f.buyer !== undefined ? { buyer: f.buyer.trim() } : {}),
+    }, a.status === 'verkauft' ? 'Als versendet markiert' : 'Versand gespeichert');
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); save(); });
+  $('#ship-save', m).addEventListener('click', save);
+}
+
 function staleAdvice(a) {
-  if (a.status === 'verkauft') return '';
+  if (isSold(a)) return '';
   const days = ageDays(a);
   const lvl = ageLevel(days);
   if (lvl === 0) return '';
@@ -167,7 +228,7 @@ function staleAdvice(a) {
 }
 
 function listingSection(a) {
-  if (a.status === 'verkauft') {
+  if (isSold(a)) {
     if (!a.listings?.length) return '';
     return `<div class="listings warn"><b>⚠ Noch online auf:</b> Dort löschen und hier abhaken.
       <div class="chips">${a.listings.map((l) => `<button class="chip" data-delisted="${esc(l)}">${esc(l)} ✓ gelöscht</button>`).join('')}</div></div>`;
@@ -237,6 +298,7 @@ function sellForm(a) {
         <label>Verkaufspreis *<input name="sale_price" inputmode="decimal" required value="${moneyValue(a.sale_price ?? a.listed_price)}" placeholder="0,00"></label>
         <label>Verkauft am<input name="sale_date" type="date" value="${esc(a.sale_date || today())}"></label>
         <label>Plattform<select name="sale_platform">${options(PLATFORMS, a.sale_platform || (a.listings?.length === 1 ? a.listings[0] : ''), '–')}</select></label>
+        <label>Käufer (optional)<input name="buyer" maxlength="120" value="${esc(a.buyer)}" placeholder="Name oder Nutzername" autocomplete="off"></label>
         <label>Gebühren<input name="sale_fees" inputmode="decimal" value="${moneyValue(a.sale_fees || null)}" placeholder="0,00"></label>
         <label>Versand (von dir bezahlt)<input name="shipping_out" inputmode="decimal" value="${moneyValue(a.shipping_out || null)}" placeholder="0,00"></label>
       </div>
@@ -244,7 +306,7 @@ function sellForm(a) {
       <p class="error" id="sell-error"></p>
     </form>
     <div class="modal-foot">
-      ${a.status === 'verkauft' ? '<button class="btn ghost" id="unsell">Verkauf zurücknehmen</button>' : ''}
+      ${isSold(a) ? '<button class="btn ghost" id="unsell">Verkauf zurücknehmen</button>' : ''}
       <button class="btn" data-close>Abbrechen</button>
       <button class="btn primary" id="sell-save">Speichern</button>
     </div>`);
@@ -257,6 +319,7 @@ function sellForm(a) {
       sale_platform: f.sale_platform,
       sale_fees: parseMoney(f.sale_fees, 'Gebühren') || 0,
       shipping_out: parseMoney(f.shipping_out, 'Versand') || 0,
+      buyer: f.buyer.trim(),
     };
   };
   const preview = () => {
@@ -264,7 +327,7 @@ function sellForm(a) {
       const v = read();
       const others = (a.listings || []).filter((l) => l !== v.sale_platform);
       const pr = v.sale_price === null ? '' : `Gewinn: <b class="${profitClass(v.sale_price - costOf(a) - v.sale_fees - v.shipping_out)}">${fmtMoney(v.sale_price - costOf(a) - v.sale_fees - v.shipping_out)}</b>`;
-      $('#sell-preview', m).innerHTML = pr + (others.length && a.status !== 'verkauft' ? `<br><span class="small">Danach noch löschen auf: <b>${others.map(esc).join(', ')}</b></span>` : '');
+      $('#sell-preview', m).innerHTML = pr + (others.length && !isSold(a) ? `<br><span class="small">Danach noch löschen auf: <b>${others.map(esc).join(', ')}</b></span>` : '');
     } catch { $('#sell-preview', m).textContent = ''; }
   };
   form.addEventListener('input', preview);
@@ -275,7 +338,7 @@ function sellForm(a) {
       const v = read();
       if (v.sale_price === null) throw new Error('Bitte einen Verkaufspreis eintragen');
       const listings = (a.listings || []).filter((l) => l !== v.sale_platform);
-      await updateArticle(a.id, { ...articlePayload(a), ...v, listings, status: 'verkauft' });
+      await updateArticle(a.id, { ...articlePayload(a), ...v, listings, status: isSold(a) ? a.status : 'verkauft' });
       await refresh();
       articleDetail(a.id);
       toast(listings.length ? `Gespeichert. Jetzt noch auf ${listings.join(', ')} löschen!` : 'Verkauf gespeichert');
@@ -347,6 +410,12 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
           <label>Plattform<select name="sale_platform">${options(PLATFORMS, v.sale_platform, '–')}</select></label>
           <label>Gebühren<input name="sale_fees" inputmode="decimal" value="${moneyValue(v.sale_fees || null)}" placeholder="0,00"></label>
           <label>Versand (von dir bezahlt)<input name="shipping_out" inputmode="decimal" value="${moneyValue(v.shipping_out || null)}" placeholder="0,00"></label>
+          <label>Käufer<input name="buyer" maxlength="120" value="${esc(v.buyer)}" placeholder="optional" autocomplete="off"></label>
+        </div>
+        <div class="grid3 shipped-only">
+          <label>Versendet am<input name="shipped_at" type="date" value="${esc(v.shipped_at || today())}"></label>
+          <label>Sendungsnummer<input name="tracking_number" maxlength="80" value="${esc(v.tracking_number)}" placeholder="optional" autocomplete="off"></label>
+          <label class="done-only">Angekommen am<input name="completed_at" type="date" value="${esc(v.completed_at || today())}"></label>
         </div>
       </fieldset>
       <label>Notizen<textarea name="notes" rows="3" maxlength="4000" placeholder="Mängel, Maße, Material …">${esc(v.notes)}</textarea></label>
@@ -358,7 +427,12 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
     </div>`, { wide: true });
 
   const form = $('#art-form', m);
-  const toggleSold = () => form.classList.toggle('is-sold', form.status.value === 'verkauft');
+  const toggleSold = () => {
+    const st = form.status.value;
+    form.classList.toggle('is-sold', SOLD_STATUSES.includes(st));
+    form.classList.toggle('is-shipped', st === 'versendet' || st === 'abgeschlossen');
+    form.classList.toggle('is-done', st === 'abgeschlossen');
+  };
   form.status.addEventListener('change', toggleSold);
   toggleSold();
 
@@ -424,6 +498,10 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
         sale_platform: f.sale_platform,
         sale_fees: parseMoney(f.sale_fees, 'Gebühren') || 0,
         shipping_out: parseMoney(f.shipping_out, 'Versand') || 0,
+        buyer: f.buyer.trim(),
+        tracking_number: f.tracking_number.trim(),
+        shipped_at: f.shipped_at || null,
+        completed_at: f.completed_at || null,
         listings: v.listings || [],
         extra_costs: $$('.x-row', xRows).map((r, i) => ({
           amount: parseMoney($('[data-x=amount]', r).value, `Zusatzkosten Zeile ${i + 1}`),
@@ -434,7 +512,7 @@ export function articleForm(a = null, presetHaulId = null, template = null) {
         }),
       };
       if (!haul && body.purchase_input === null) body.purchase_input = 0;
-      if (body.status === 'verkauft' && body.sale_price === null) throw new Error('Bitte einen Verkaufspreis eintragen');
+      if (SOLD_STATUSES.includes(body.status) && body.sale_price === null) throw new Error('Bitte einen Verkaufspreis eintragen');
       btn.disabled = true;
       const pending = gallery.filter((it) => it.file).length;
       if (pending) btn.textContent = `Lädt ${pending} Foto${pending > 1 ? 's' : ''} …`;

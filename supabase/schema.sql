@@ -37,7 +37,7 @@ create table if not exists public.articles (
   purchase_price bigint not null default 0 check (purchase_price between 0 and 10000000),
   shipping_in    bigint not null default 0 check (shipping_in between 0 and 10000000),
   purchase_date  date,
-  status         text not null default 'lager' check (status in ('lager', 'gelistet', 'verkauft')),
+  status         text not null default 'lager',
   listed_price   bigint check (listed_price between 0 and 10000000),
   listings       text[] not null default '{}',
   sale_price     bigint check (sale_price between 0 and 10000000),
@@ -49,7 +49,6 @@ create table if not exists public.articles (
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now(),
   unique (user_id, article_no),
-  check (status <> 'verkauft' or sale_price is not null),
   check (cardinality(images) <= 12),
   -- Ein Artikel kann nur in einem Haul desselben Nutzers liegen.
   foreign key (haul_id, user_id) references public.hauls (id, user_id) on delete set null (haul_id)
@@ -88,6 +87,36 @@ do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'articles_extra_costs_valid') then
     alter table public.articles add constraint articles_extra_costs_valid check (public.valid_extra_costs(extra_costs));
+  end if;
+end $$;
+
+-- Verkauf nachverfolgen: Käufer, Versand mit Sendungsnummer, angekommen & akzeptiert.
+alter table public.articles add column if not exists buyer text not null default '';
+alter table public.articles add column if not exists tracking_number text not null default '';
+alter table public.articles add column if not exists shipped_at date;
+alter table public.articles add column if not exists completed_at date;
+
+-- Status-Regeln (neu angelegt, damit auch ältere Datenbanken die neuen Status kennen).
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+           where conrelid = 'public.articles'::regclass and contype = 'c'
+             and pg_get_constraintdef(oid) like '%verkauft%'
+             and conname not in ('articles_status_valid', 'articles_sold_needs_price') loop
+    execute format('alter table public.articles drop constraint %I', c.conname);
+  end loop;
+  if not exists (select 1 from pg_constraint where conname = 'articles_status_valid') then
+    alter table public.articles add constraint articles_status_valid
+      check (status in ('lager', 'gelistet', 'verkauft', 'versendet', 'abgeschlossen'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'articles_sold_needs_price') then
+    alter table public.articles add constraint articles_sold_needs_price
+      check (status not in ('verkauft', 'versendet', 'abgeschlossen') or sale_price is not null);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'articles_shipping_texts') then
+    alter table public.articles add constraint articles_shipping_texts
+      check (char_length(buyer) <= 120 and char_length(tracking_number) <= 80);
   end if;
 end $$;
 

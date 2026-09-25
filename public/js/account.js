@@ -1,6 +1,6 @@
 // Konto: Passwort, Export, Abmelden, App installieren.
 
-import { STATUSES, costOf, extraOf, profitOf, fmtArticleNo } from './shared.js';
+import { STATUSES, costOf, extraOf, profitOf, fmtArticleNo, isSold } from './shared.js';
 import { sb, state, haulById } from './store.js';
 import { $, esc, toast, download, today } from './ui.js';
 import { logout } from './app.js';
@@ -78,13 +78,13 @@ const csvMoney = (c) => (c === null || c === undefined ? '' : (c / 100).toFixed(
 function exportCsv() {
   const head = ['Nr', 'Titel', 'Kategorie', 'Marke', 'Größe', 'Farbe', 'Zustand', 'Lagerort', 'Haul', 'Einkaufsdatum', 'Einkaufspreis',
     'Versand Einkauf', 'Zusatzkosten', 'Zusatzkosten Details', 'Kosten gesamt', 'Status', 'Online auf', 'Angebotspreis', 'Verkaufspreis', 'Verkaufsdatum', 'Plattform',
-    'Gebühren', 'Versand Verkauf', 'Gewinn', 'Notizen'];
+    'Gebühren', 'Versand Verkauf', 'Gewinn', 'Käufer', 'Versendet am', 'Sendungsnummer', 'Angekommen am', 'Notizen'];
   const rows = [...state.articles].sort((a, b) => a.article_no - b.article_no).map((a) => [
     fmtArticleNo(a.article_no), a.title, a.category, a.brand, a.size, a.color, a.condition, a.location,
     a.haul_id ? haulById(a.haul_id)?.name : '', a.purchase_date || '', csvMoney(a.purchase_price), csvMoney(a.shipping_in),
     csvMoney(extraOf(a)), (a.extra_costs || []).map((x) => `${csvMoney(x.amount)} € ${x.note}`.trim()).join(' | '), csvMoney(costOf(a)), STATUSES[a.status], (a.listings || []).join(', '), csvMoney(a.listed_price), csvMoney(a.sale_price),
-    a.sale_date || '', a.sale_platform, csvMoney(a.status === 'verkauft' ? a.sale_fees : null),
-    csvMoney(a.status === 'verkauft' ? a.shipping_out : null), csvMoney(profitOf(a)), a.notes,
+    a.sale_date || '', a.sale_platform, csvMoney(isSold(a) ? a.sale_fees : null),
+    csvMoney(isSold(a) ? a.shipping_out : null), csvMoney(profitOf(a)), a.buyer, a.shipped_at || '', a.tracking_number, a.completed_at || '', a.notes,
   ].map(csvCell).join(';'));
   download(`resell-export-${today()}.csv`, '﻿' + [head.join(';'), ...rows].join('\r\n'), 'text/csv;charset=utf-8');
 }

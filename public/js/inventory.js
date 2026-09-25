@@ -1,6 +1,6 @@
 // Inventar: Kennzahlen, Filter und Artikelliste.
 
-import { CATEGORIES, STATUSES, profitOf, costOf, fmtMoney, fmtArticleNo, ageDays, ageLevel } from './shared.js';
+import { CATEGORIES, STATUSES, profitOf, costOf, fmtMoney, fmtArticleNo, ageDays, ageLevel, isSold } from './shared.js';
 import { state, haulById, hydrateImages } from './store.js';
 import { $, $$, esc, profitClass, statusOptions, options } from './ui.js';
 import { articleDetail, articleForm } from './article.js';
@@ -14,7 +14,7 @@ export function computeStats(list) {
   for (const a of list) {
     const cost = costOf(a);
     s.invested += cost;
-    if (a.status === 'verkauft') {
+    if (isSold(a)) {
       s.sold++;
       s.revenue += a.sale_price || 0;
       s.profit += profitOf(a) || 0;
@@ -31,7 +31,7 @@ export function computeStats(list) {
 }
 
 // Verkaufte Artikel, die noch auf anderen Plattformen online stehen.
-export const needsDelisting = (a) => a.status === 'verkauft' && a.listings?.length > 0;
+export const needsDelisting = (a) => isSold(a) && a.listings?.length > 0;
 
 function statsHtml(s) {
   const roi = s.soldCost > 0 ? Math.round((s.profit / s.soldCost) * 100) : null;
@@ -50,16 +50,19 @@ function statsHtml(s) {
 export function renderInventory(main) {
   const f = filter;
   const delist = state.articles.filter(needsDelisting);
+  const toShip = state.articles.filter((a) => a.status === 'verkauft');
   main.innerHTML = `
     ${statsHtml(computeStats(state.articles))}
     ${delist.length ? `<button class="banner warn" data-special="loeschen"><b>⚠ ${delist.length} verkaufte${delist.length === 1 ? 'r Artikel ist' : ' Artikel sind'} noch auf anderen Plattformen online.</b>
       <span>Dort löschen, sonst verkaufst du doppelt. Anzeigen →</span></button>` : ''}
+    ${toShip.length ? `<button class="banner info" data-special="versenden"><b>📦 ${toShip.length} verkaufte${toShip.length === 1 ? 'r Artikel wartet' : ' Artikel warten'} auf den Versand.</b>
+      <span>Anzeigen →</span></button>` : ''}
     <section class="toolbar">
-      <input type="search" id="f-q" placeholder="Suchen: Titel, Marke, Nr, Lagerort …" value="${esc(f.q)}">
+      <input type="search" id="f-q" placeholder="Suchen: Titel, Marke, Nr, Käufer, Sendungsnr …" value="${esc(f.q)}">
       <select id="f-status"><option value="">Alle Status</option>${statusOptions(f.status)}</select>
       <select id="f-category">${options(CATEGORIES, f.category, 'Alle Kategorien')}</select>
       <select id="f-special">
-        ${[['', 'Kein Sonderfilter'], ['ladenhueter', 'Ladenhüter (60+ Tage)'], ['loeschen', 'Noch woanders löschen'], ['ohne-bild', 'Ohne Foto'], ['ohne-preis', 'Ohne Angebotspreis']]
+        ${[['', 'Kein Sonderfilter'], ['versenden', 'Noch versenden'], ['unterwegs', 'Unterwegs (versendet)'], ['ladenhueter', 'Ladenhüter (60+ Tage)'], ['loeschen', 'Noch woanders löschen'], ['ohne-bild', 'Ohne Foto'], ['ohne-preis', 'Ohne Angebotspreis']]
           .map(([k, v]) => `<option value="${k}"${k === f.special ? ' selected' : ''}>${v}</option>`).join('')}
       </select>
       <select id="f-sort">
@@ -91,17 +94,19 @@ function filteredArticles() {
   const q = f.q.trim().toLowerCase().replace(/^#0*/, '');
   const special = {
     '': () => true,
-    ladenhueter: (a) => a.status !== 'verkauft' && ageDays(a) >= 60,
+    ladenhueter: (a) => !isSold(a) && ageDays(a) >= 60,
     loeschen: needsDelisting,
+    versenden: (a) => a.status === 'verkauft',
+    unterwegs: (a) => a.status === 'versendet',
     'ohne-bild': (a) => !a.images?.length,
-    'ohne-preis': (a) => a.status !== 'verkauft' && a.listed_price === null,
+    'ohne-preis': (a) => !isSold(a) && a.listed_price === null,
   }[f.special] || (() => true);
   const list = state.articles.filter((a) =>
     (!f.status || a.status === f.status) &&
     (!f.category || a.category === f.category) &&
     special(a) &&
-    (!q || `${a.title} ${a.brand} ${a.size} ${a.color} ${a.notes} ${a.location} ${a.article_no}`.toLowerCase().includes(q)));
-  const age = (a) => (a.status === 'verkauft' ? -1 : ageDays(a));
+    (!q || `${a.title} ${a.brand} ${a.size} ${a.color} ${a.notes} ${a.location} ${a.buyer} ${a.tracking_number} ${a.article_no}`.toLowerCase().includes(q)));
+  const age = (a) => (isSold(a) ? -1 : ageDays(a));
   const by = {
     neu: (a, b) => b.article_no - a.article_no,
     alt: (a, b) => a.article_no - b.article_no,
@@ -122,7 +127,7 @@ export function thumb(a, cls = 'thumb') {
 const AGE_LABEL = ['', 'seit', 'Ladenhüter', 'Ladenhüter'];
 
 export function ageChip(a) {
-  if (a.status === 'verkauft') return '';
+  if (isSold(a)) return '';
   const d = ageDays(a);
   const lvl = ageLevel(d);
   if (lvl === 0) return `<span class="age">${d} T.</span>`;
@@ -134,19 +139,21 @@ export function articleRow(a) {
   const haul = a.haul_id ? haulById(a.haul_id) : null;
   const meta = [a.category, a.brand, a.size && `Gr. ${a.size}`, a.location && `📦 ${a.location}`, haul && `Haul: ${haul.name}`]
     .filter(Boolean).map(esc).join(' · ');
-  const online = a.status !== 'verkauft' && a.listings?.length ? `<span class="chips-mini">${a.listings.map((l) => `<i>${esc(l)}</i>`).join('')}</span>` : '';
+  const online = !isSold(a) && a.listings?.length ? `<span class="chips-mini">${a.listings.map((l) => `<i>${esc(l)}</i>`).join('')}</span>` : '';
   const delist = needsDelisting(a) ? `<span class="age lvl3">⚠ noch auf ${a.listings.map(esc).join(', ')} löschen</span>` : '';
+  const ship = a.status === 'verkauft' ? `<span class="age ship">📦 noch versenden${a.buyer ? ` an ${esc(a.buyer)}` : ''}</span>`
+    : a.status === 'versendet' ? `<span class="age">unterwegs${a.buyer ? ` zu ${esc(a.buyer)}` : ''}</span>` : '';
   return `
   <button class="row" data-id="${a.id}">
     ${thumb(a)}
     <div class="row-main">
       <div class="row-title"><span class="no">${fmtArticleNo(a.article_no)}</span>${esc(a.title)}</div>
       <div class="row-meta">${meta}</div>
-      <div class="row-tags">${ageChip(a)}${online}${delist}</div>
+      <div class="row-tags">${ageChip(a)}${online}${ship}${delist}</div>
     </div>
     <div class="row-nums">
       <div><span>EK</span>${fmtMoney(costOf(a))}</div>
-      <div><span>${a.status === 'verkauft' ? 'VK' : 'Preis'}</span>${fmtMoney(a.status === 'verkauft' ? a.sale_price : a.listed_price)}</div>
+      <div><span>${isSold(a) ? 'VK' : 'Preis'}</span>${fmtMoney(isSold(a) ? a.sale_price : a.listed_price)}</div>
       <div><span>Gewinn</span><b class="${profitClass(p)}">${fmtMoney(p)}</b></div>
     </div>
     <span class="badge ${a.status}">${STATUSES[a.status]}</span>

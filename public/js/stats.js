@@ -1,6 +1,6 @@
 // Auswertung: Kennzahlen, Gewinn pro Monat, Aufschlüsselungen, DAC7 und Nebenkosten.
 
-import { EXPENSE_CATEGORIES, ONLINE_PLATFORMS, DAC7, profitOf, costOf, fmtMoney, ageDays } from './shared.js';
+import { EXPENSE_CATEGORIES, ONLINE_PLATFORMS, DAC7, profitOf, costOf, fmtMoney, ageDays, isSold } from './shared.js';
 import { state, haulById, createExpense, deleteExpense } from './store.js';
 import { $, $$, esc, toast, parseMoney, today, fmtDate, options, profitClass, guard, confirmDialog } from './ui.js';
 import { refresh } from './app.js';
@@ -16,11 +16,11 @@ const inPeriod = (d) => period === 'alle' || (d || '').startsWith(period);
 
 export function renderStats(main) {
   const years = new Set([String(new Date().getFullYear())]);
-  state.articles.forEach((a) => { if (a.status === 'verkauft' && saleDate(a)) years.add(saleDate(a).slice(0, 4)); });
+  state.articles.forEach((a) => { if (isSold(a) && saleDate(a)) years.add(saleDate(a).slice(0, 4)); });
   state.expenses.forEach((e) => years.add(e.date.slice(0, 4)));
   if (period !== 'alle' && !years.has(period)) period = String(new Date().getFullYear());
 
-  const sold = state.articles.filter((a) => a.status === 'verkauft' && inPeriod(saleDate(a)));
+  const sold = state.articles.filter((a) => isSold(a) && inPeriod(saleDate(a)));
   const expenses = state.expenses.filter((e) => inPeriod(e.date));
   const revenue = sum(sold, (a) => a.sale_price);
   const profit = sum(sold, profitOf);
@@ -119,7 +119,7 @@ function monthly() {
   const data = keys.map((k) => ({ key: k, profit: 0, revenue: 0, count: 0, extra: 0 }));
   const idx = new Map(keys.map((k, i) => [k, i]));
   for (const a of state.articles) {
-    if (a.status !== 'verkauft') continue;
+    if (!isSold(a)) continue;
     const i = idx.get(saleDate(a).slice(0, 7));
     if (i === undefined) continue;
     data[i].profit += profitOf(a);
@@ -228,7 +228,7 @@ function shortMoney(c) {
 function dac7Panel() {
   const year = period === 'alle' ? String(new Date().getFullYear()) : period;
   const rows = ONLINE_PLATFORMS.map((p) => {
-    const list = state.articles.filter((a) => a.status === 'verkauft' && a.sale_platform === p && saleDate(a).startsWith(year));
+    const list = state.articles.filter((a) => isSold(a) && a.sale_platform === p && saleDate(a).startsWith(year));
     const count = list.length;
     const revenue = sum(list, (a) => a.sale_price);
     const pct = Math.max(count / DAC7.sales, revenue / DAC7.revenue);

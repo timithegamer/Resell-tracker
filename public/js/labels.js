@@ -2,7 +2,7 @@
 // direkt zum Artikel, die normale Handykamera reicht zum Scannen.
 
 import qrcode from '../vendor/qrcode-2.0.4.mjs';
-import { fmtArticleNo, STATUSES } from './shared.js';
+import { fmtArticleNo, STATUSES, isSold } from './shared.js';
 import { state } from './store.js';
 import { $, $$, esc, openModal, modalHead, toast } from './ui.js';
 
@@ -16,7 +16,7 @@ function qrSvg(text) {
 }
 
 export function labelPicker() {
-  const list = state.articles.filter((a) => a.status !== 'verkauft').sort((a, b) => b.article_no - a.article_no);
+  const list = state.articles.filter((a) => !isSold(a)).sort((a, b) => b.article_no - a.article_no);
   if (!list.length) { toast('Keine Artikel auf Lager'); return; }
   const m = openModal(`
     ${modalHead('QR-Etiketten drucken', 'Etikett auf die Tüte oder Box kleben. Scannen mit der Handykamera öffnet direkt den Artikel.')}

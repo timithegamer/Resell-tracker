@@ -46,6 +46,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -519,3 +520,31 @@ code { font-size: .85em; background: var(--surface-2); padding: 1px 5px; border-
 .x-rows { display: flex; flex-direction: column; gap: 8px; }
 .x-rows:empty { display: none; }
 .x-row { display: grid; grid-template-columns: 110px 1fr 34px; gap: 8px; align-items: center; }
+
+/* Versand nachverfolgen */
+.badge.versendet { background: #fef3c7; color: #92400e; }
+.badge.abgeschlossen { background: #0f766e; color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .badge.versendet { background: #3a2f12; color: #fcd58a; }
+  .badge.abgeschlossen { background: #2bb3a5; color: #06201d; }
+}
+.shipped-only, .done-only { display: none; }
+.is-shipped .shipped-only { display: grid; }
+.is-done .done-only { display: flex; }
+.banner.info { border-color: var(--accent); background: var(--accent-soft); }
+.age.ship { background: var(--accent-soft); color: var(--text); }
+.track { margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; gap: 12px; }
+.track-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.track-steps li { position: relative; padding-top: 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.track-steps li::before { content: ''; position: absolute; top: 4px; left: 0; right: 0; height: 4px; border-radius: 4px; background: var(--surface-2); }
+.track-steps li.done::before { background: var(--accent); }
+.track-steps li b { font-size: .88rem; color: var(--muted); }
+.track-steps li.done b { color: var(--text); }
+.track-steps li.current b::after { content: ' ●'; color: var(--accent); font-size: .7rem; vertical-align: 2px; }
+.track-steps small { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.track-steps .mono { font-family: ui-monospace, Menlo, monospace; color: var(--text); }
+@media (max-width: 640px) {
+  .track-steps { grid-template-columns: 1fr; gap: 8px; }
+  .track-steps li { padding: 0 0 0 16px; }
+  .track-steps li::before { top: 2px; bottom: 2px; left: 0; right: auto; width: 4px; height: auto; }
+}
